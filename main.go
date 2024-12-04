@@ -40,12 +40,14 @@ func main() {
 
 
 	TSharesPayout := calculateTSharePayout(TShares, apiresponse)
+	TSharesValue := calculateTShareValue(TShares, apiresponse)
 
 	currentData := map[string]interface{}{
 		"HEX Price":       apiresponse.HexPrice,
 		"T-Share Price":   apiresponse.TSharePrice,
 		"T-Share Rate":    apiresponse.TShareRateHEX,
 		"T-Share Payout":  TSharesPayout,
+		"T-Share Value": TSharesValue,
 	}
 
 	homepath := os.Getenv("HOME")
@@ -55,7 +57,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	displayData(apiresponse, TSharesPayout, TShares)
+	displayData(apiresponse, TSharesPayout, TSharesValue, TShares)
 	compareData(currentData, savedData, TShares)
 
 	if err := saveToFile(filename, currentData); err != nil {
@@ -66,6 +68,11 @@ func main() {
 
 func calculateTSharePayout(TShares int, apiresponse ApiResp) float64 {
 	return apiresponse.TSharePayout * float64(TShares)
+}
+
+
+func calculateTShareValue(TShares int, apiresponse ApiResp) float64 {
+	return apiresponse.TSharePrice * float64(TShares)
 }
 
 
@@ -121,12 +128,13 @@ func fetchApiData() (ApiResp, error) {
 	return apiresponse, nil
 }
 
-func displayData(apiresponse ApiResp, TSharesPayout float64, TShares int) {
+func displayData(apiresponse ApiResp, TSharesPayout float64, TSharesValue float64, TShares int) {
 	// Structure output
 	fmt.Printf("%-14s : %3.6f $\n", "HEX Price", apiresponse.HexPrice)
 	fmt.Printf("%-14s : %3.2f $\n", "T-Share Price", apiresponse.TSharePrice)
 	fmt.Printf("%-14s : %3.1f HEX\n", "T-Share Rate", apiresponse.TShareRateHEX)
 	fmt.Printf("%-14s : %3.3f HEX\n", "T-Share Payout", TSharesPayout)
+	fmt.Printf("%-14s : %3.3f $\n", "T-Share Value", TSharesValue)
 	fmt.Printf("%-14s : %1d\n", "T-Shares", TShares)
 }
 
@@ -141,6 +149,7 @@ func compareData(currentData, savedData map[string]interface{}, TShares int) {
 		"T-Share Price",
 		"T-Share Rate",
 		"T-Share Payout",
+		"T-Share Value",
 		"T-Shares",
 	}
 
@@ -149,6 +158,7 @@ func compareData(currentData, savedData map[string]interface{}, TShares int) {
 		"T-Share Price":   "%3.2f $",
 		"T-Share Rate":    "%3.1f HEX",
 		"T-Share Payout":  "%3.3f HEX",
+		"T-Share Value":  "%3.2f $",
 		"T-Shares":        "%d",
 	}
 
