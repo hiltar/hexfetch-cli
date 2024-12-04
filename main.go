@@ -47,7 +47,7 @@ func main() {
 		"T-Share Price":   apiresponse.TSharePrice,
 		"T-Share Rate":    apiresponse.TShareRateHEX,
 		"T-Share Payout":  TSharesPayout,
-		"T-Share Value": TSharesValue,
+		"T-Share Value":   TSharesValue,
 	}
 
 	homepath := os.Getenv("HOME")
@@ -158,7 +158,7 @@ func compareData(currentData, savedData map[string]interface{}, TShares int) {
 		"T-Share Price":   "%3.2f $",
 		"T-Share Rate":    "%3.1f HEX",
 		"T-Share Payout":  "%3.3f HEX",
-		"T-Share Value":  "%3.2f $",
+		"T-Share Value":   "%3.2f $",
 		"T-Shares":        "%d",
 	}
 
