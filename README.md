@@ -26,7 +26,7 @@ T-Share Price  : 149.92 $
 T-Share Rate   : 36321.7 HEX
 T-Share Payout : 753.181 HEX
 T-Share Value  : 14992.00 $
-T-Shares       : 100
+T-Shares       : 100.00
 ```
 If there are changes, it will output the changed values:
 ```
