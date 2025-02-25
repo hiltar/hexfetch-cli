@@ -5,9 +5,9 @@ import (
     "fmt"
     "io/ioutil"
     "net/http"
-    "strconv"
-    "path/filepath"
     "os"
+    "path/filepath"
+    "strconv"
 )
 
 type ApiResp struct {
@@ -18,7 +18,6 @@ type ApiResp struct {
 }
 
 func main() {
-    // Changed TShares to float64
     TShares := 1.0
     if len(os.Args) > 1 {
         var err error
@@ -53,8 +52,12 @@ func main() {
         fmt.Println(err)
     }
 
-    displayData(apiresponse, TSharesPayout, TSharesValue, TShares)
-    compareData(currentData, savedData, TShares)
+
+    hasChanges := compareData(currentData, savedData, TShares)
+
+    if !hasChanges {
+        displayData(apiresponse, TSharesPayout, TSharesValue, TShares)
+    }
 
     if err := saveToFile(filename, currentData); err != nil {
         fmt.Println(err)
@@ -120,7 +123,6 @@ func fetchApiData() (ApiResp, error) {
 }
 
 func displayData(apiresponse ApiResp, TSharesPayout float64, TSharesValue float64, TShares float64) {
-    // Structure output
     fmt.Printf("%-14s : %3.6f $\n", "HEX Price", apiresponse.HexPrice)
     fmt.Printf("%-14s : %3.2f $\n", "T-Share Price", apiresponse.TSharePrice)
     fmt.Printf("%-14s : %3.1f HEX\n", "T-Share Rate", apiresponse.TShareRateHEX)
@@ -129,7 +131,7 @@ func displayData(apiresponse ApiResp, TSharesPayout float64, TSharesValue float6
     fmt.Printf("%-14s : %3.2f\n", "T-Shares", TShares)
 }
 
-func compareData(currentData, savedData map[string]interface{}, TShares float64) {
+func compareData(currentData, savedData map[string]interface{}, TShares float64) bool {
     hasChanges := false
     var changes []string
 
@@ -192,9 +194,9 @@ func compareData(currentData, savedData map[string]interface{}, TShares float64)
     }
 
     if hasChanges {
-        fmt.Println("\nChanges since last fetch:")
         for _, change := range changes {
             fmt.Println(change)
         }
-    }
+    } 
+    return hasChanges
 }
