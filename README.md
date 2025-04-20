@@ -5,9 +5,7 @@ Fetching HEX Pulsechain API with Golang
 ## Usage
 
 `go run main.go` - This will use 1 T-Share  
-`go run main.go 100` - T-Share Payout * 100 T-Shares
-
-__NOTE:__ Statistics are updated at 0:00 UTC
+`go run main.go 100` - This will use 100 T-Shares
 
 ## Building Go package
 ```
