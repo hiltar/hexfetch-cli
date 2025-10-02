@@ -3,7 +3,7 @@ package main
 import (
     "encoding/json"
     "fmt"
-    "io/ioutil"
+    "io"
     "net/http"
     "os"
     "path/filepath"
@@ -52,7 +52,6 @@ func main() {
         fmt.Println(err)
     }
 
-
     hasChanges := compareData(currentData, savedData, TShares)
 
     if !hasChanges {
@@ -77,12 +76,12 @@ func saveToFile(filename string, data map[string]interface{}) error {
     if err != nil {
         return err
     }
-    return ioutil.WriteFile(filename, file, 0644)
+    return os.WriteFile(filename, file, 0644)
 }
 
 func loadFromFile(filename string) (map[string]interface{}, error) {
     data := make(map[string]interface{})
-    file, err := ioutil.ReadFile(filename)
+    file, err := os.ReadFile(filename)
     if err != nil {
         return data, err
     }
@@ -109,7 +108,7 @@ func fetchApiData() (ApiResp, error) {
         return apiresponse, fmt.Errorf("Received non-OK HTTP status: %d", resp.StatusCode)
     }
 
-    body, err := ioutil.ReadAll(resp.Body)
+    body, err := io.ReadAll(resp.Body)
     if err != nil {
         return apiresponse, err
     }
