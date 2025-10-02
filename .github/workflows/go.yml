@@ -18,13 +18,13 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.24'
+        go-version: '1.25'
         
     - name: Build
       run: |
         go mod init hexfetch
         CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -o hexfetch-cli
-        upx --best hexfetch-cli
+        upx --best --lzma hexfetch-cli
 
     - name: Upload hexfetch as artifact
       uses: actions/upload-artifact@v4
