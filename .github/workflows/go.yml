@@ -23,7 +23,7 @@ jobs:
     - name: Build
       run: |
         go mod init hexfetch
-        CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -o hexfetch-cli
+        CGO_ENABLED=0 GOOS=linux go build -a -trimpath -ldflags="-s -w" -o hexfetch-cli
         upx --best --lzma hexfetch-cli
 
     - name: Upload hexfetch as artifact
