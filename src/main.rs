@@ -11,9 +11,7 @@ struct LiveData {
     price_pulsechain: f64,
     tshare_price_pulsechain: f64,
     tshare_rate_hex_pulsechain: f64,
-    penalties_hex_pulsechain: f64,
     payout_per_tshare_pulsechain: f64,
-    beat: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -28,10 +26,6 @@ struct SavedData {
     tshare_payout: f64,
     #[serde(rename = "T-Share Value")]
     tshare_value: f64,
-    #[serde(rename = "Penalties")]
-    penalties: f64,
-    #[serde(rename = "Beat")]
-    beat: f64,
     #[serde(rename = "T-Shares")]
     tshares: f64,
 }
@@ -64,13 +58,11 @@ fn main() {
         tshare_rate: live_data.tshare_rate_hex_pulsechain,
         tshare_payout: tshares_payout,
         tshare_value: tshares_value,
-        penalties: live_data.penalties_hex_pulsechain,
-        beat: live_data.beat,
         tshares,
     };
 
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let dir = PathBuf::from(home).join("hexfetch");
+    let dir = PathBuf::from(home).join("hexfetch-cli");
     let _ = fs::create_dir_all(&dir);
     let filename = dir.join("saved_hexdata.json");
 
@@ -142,36 +134,27 @@ fn fetch_live_data() -> Result<LiveData, String> {
         .or_else(|| dex_resp["pairs"][0]["priceUsd"].as_str().and_then(|s| s.parse().ok()))
         .unwrap_or(0.0);
 
-    // 2. Fetch Gas Price (Beat)
-    let gas_price_hex = call_rpc("eth_gasPrice", serde_json::json!([]))?;
-    let gas_price_wei = u128::from_str_radix(gas_price_hex.strip_prefix("0x").unwrap_or(&gas_price_hex), 16).unwrap_or(0);
-    let beat = gas_price_wei as f64 / 1e9;
-
-    // 3. Fetch Globals
+    // 2. Fetch Globals
     let globals_data = serde_json::json!([{"to": HEX_CONTRACT, "data": "0xc3124525"}, "latest"]);
     let globals_hex = call_rpc("eth_call", globals_data)?;
     let g_str = globals_hex.strip_prefix("0x").unwrap_or(&globals_hex);
 
     let mut tshare_rate = 0.0;
-    let mut penalties = 0.0;
     let mut daily_data_count: u128 = 0;
 
     if g_str.len() >= 320 {
         let share_rate = u128::from_str_radix(&g_str[128..192], 16).unwrap_or(0);
-        let penalty_total = u128::from_str_radix(&g_str[192..256], 16).unwrap_or(0);
         daily_data_count = u128::from_str_radix(&g_str[256..320], 16).unwrap_or(0);
 
         if share_rate > 0 {
             tshare_rate = share_rate as f64 / 10.0;
         }
-        penalties = penalty_total as f64 / 1e8;
     }
 
-    // 4. Fetch Daily Data
+    // 3. Fetch Daily Data
     let mut payout_per_tshare = 0.0;
     if daily_data_count > 0 {
         let day_to_query = daily_data_count - 1;
-        // FIXED: Padded to 64 hex characters (32 bytes) for correct ABI encoding
         let day_padded = format!("0x90de6871{:064x}", day_to_query); 
         let daily_data = serde_json::json!([{"to": HEX_CONTRACT, "data": day_padded}, "latest"]);
         
@@ -193,9 +176,7 @@ fn fetch_live_data() -> Result<LiveData, String> {
         price_pulsechain: price,
         tshare_price_pulsechain: tshare_rate * price,
         tshare_rate_hex_pulsechain: tshare_rate,
-        penalties_hex_pulsechain: penalties,
         payout_per_tshare_pulsechain: payout_per_tshare,
-        beat,
     })
 }
 
@@ -206,8 +187,6 @@ fn display_data(live_data: &LiveData, tshares_payout: f64, tshares_value: f64, t
     println!("{:<14} : {:3.3} HEX", "T-Share Payout", tshares_payout);
     println!("{:<14} : {:3.2} $", "T-Share Value", tshares_value);
     println!("{:<14} : {:3.2}", "T-Shares", tshares);
-    println!("{:<14} : {:3.2} HEX", "Penalties", live_data.penalties_hex_pulsechain);
-    println!("{:<14} : {:3.2} Beat", "Beat", live_data.beat);
 }
 
 fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
@@ -217,8 +196,6 @@ fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
         ("T-Share Rate", current.tshare_rate, saved.tshare_rate, 1, "HEX", 6),
         ("T-Share Payout", current.tshare_payout, saved.tshare_payout, 3, "HEX", 6),
         ("T-Share Value", current.tshare_value, saved.tshare_value, 2, "$", 6),
-        ("Penalties", current.penalties, saved.penalties, 2, "HEX", 6),
-        ("Beat", current.beat, saved.beat, 2, "Beat", 6),
         ("T-Shares", current.tshares, saved.tshares, 2, "", 2),
     ];
 
