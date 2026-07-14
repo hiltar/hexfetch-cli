@@ -3,16 +3,17 @@ use std::path::PathBuf;
 use std::io;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
-struct ApiResp {
-    #[serde(rename = "price_Pulsechain")]
-    hex_price: f64,
-    #[serde(rename = "tsharePrice_Pulsechain")]
-    tshare_price: f64,
-    #[serde(rename = "tshareRateHEX_Pulsechain")]
-    tshare_rate_hex: f64,
-    #[serde(rename = "payoutPerTshare_Pulsechain")]
-    tshare_payout: f64,
+const RPC_URL: &str = "https://rpc.pulsechain.com";
+const HEX_CONTRACT: &str = "0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39";
+const DEXSCREENER_URL: &str = "https://api.dexscreener.com/latest/dex/tokens/0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39";
+
+struct LiveData {
+    price_pulsechain: f64,
+    tshare_price_pulsechain: f64,
+    tshare_rate_hex_pulsechain: f64,
+    penalties_hex_pulsechain: f64,
+    payout_per_tshare_pulsechain: f64,
+    beat: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -27,6 +28,10 @@ struct SavedData {
     tshare_payout: f64,
     #[serde(rename = "T-Share Value")]
     tshare_value: f64,
+    #[serde(rename = "Penalties")]
+    penalties: f64,
+    #[serde(rename = "Beat (Gwei)")]
+    beat: f64,
     #[serde(rename = "T-Shares")]
     tshares: f64,
 }
@@ -42,23 +47,25 @@ fn main() {
         1.0
     };
 
-    let api_resp = match fetch_api_data() {
-        Ok(resp) => resp,
+    let live_data = match fetch_live_data() {
+        Ok(data) => data,
         Err(e) => {
-            println!("Error fetching API data: {}", e);
+            println!("Error fetching live data: {}", e);
             return;
         }
     };
 
-    let tshares_payout = api_resp.tshare_payout * tshares;
-    let tshares_value = api_resp.tshare_price * tshares;
+    let tshares_payout = live_data.payout_per_tshare_pulsechain * tshares;
+    let tshares_value = live_data.tshare_price_pulsechain * tshares;
 
     let current_data = SavedData {
-        hex_price: api_resp.hex_price,
-        tshare_price: api_resp.tshare_price,
-        tshare_rate: api_resp.tshare_rate_hex,
+        hex_price: live_data.price_pulsechain,
+        tshare_price: live_data.tshare_price_pulsechain,
+        tshare_rate: live_data.tshare_rate_hex_pulsechain,
         tshare_payout: tshares_payout,
         tshare_value: tshares_value,
+        penalties: live_data.penalties_hex_pulsechain,
+        beat: live_data.beat,
         tshares,
     };
 
@@ -80,7 +87,7 @@ fn main() {
     let has_changes = compare_data(&current_data, &saved_data);
 
     if !has_changes {
-        display_data(&api_resp, tshares_payout, tshares_value, tshares);
+        display_data(&live_data, tshares_payout, tshares_value, tshares);
     }
 
     if let Err(e) = save_to_file(&filename, &current_data) {
@@ -100,27 +107,107 @@ fn load_from_file(filename: &PathBuf) -> io::Result<SavedData> {
     Ok(data)
 }
 
-fn fetch_api_data() -> Result<ApiResp, String> {
-    let resp = ureq::get("https://hexdailystats.com/livedata")
-        .set("Accept", "application/json")
-        .call()
-        .map_err(|e| format!("HTTP error: {}", e))?;
-
-    if resp.status() != 200 {
-        return Err(format!("Received non-OK HTTP status: {}", resp.status()));
+fn call_rpc(method: &str, params: serde_json::Value) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": 1
+    });
+    
+    let resp = ureq::post(RPC_URL)
+        .set("Content-Type", "application/json")
+        .send_json(&payload)
+        .map_err(|e| e.to_string())?;
+        
+    let val: serde_json::Value = resp.into_json().map_err(|e| e.to_string())?;
+    
+    if let Some(err) = val.get("error") {
+        return Err(format!("RPC Error: {}", err));
     }
-
-    let api_resp: ApiResp = resp.into_json().map_err(|e| format!("JSON parse error: {}", e))?;
-    Ok(api_resp)
+    
+    val["result"].as_str().map(|s| s.to_string()).ok_or_else(|| "Missing result in RPC response".to_string())
 }
 
-fn display_data(api_resp: &ApiResp, tshares_payout: f64, tshares_value: f64, tshares: f64) {
-    println!("{:<14} : {:3.6} $", "HEX Price", api_resp.hex_price);
-    println!("{:<14} : {:3.2} $", "T-Share Price", api_resp.tshare_price);
-    println!("{:<14} : {:3.1} HEX", "T-Share Rate", api_resp.tshare_rate_hex);
+fn fetch_live_data() -> Result<LiveData, String> {
+    // 1. Fetch DEX Price
+    let resp = ureq::get(DEXSCREENER_URL)
+        .call()
+        .map_err(|e| e.to_string())?;
+        
+    let dex_resp: serde_json::Value = resp.into_json().map_err(|e| e.to_string())?;
+    
+    let price = dex_resp["pairs"][0]["priceUsd"]
+        .as_f64()
+        .or_else(|| dex_resp["pairs"][0]["priceUsd"].as_str().and_then(|s| s.parse().ok()))
+        .unwrap_or(0.0);
+
+    // 2. Fetch Gas Price (Beat)
+    let gas_price_hex = call_rpc("eth_gasPrice", serde_json::json!([]))?;
+    let gas_price_wei = u128::from_str_radix(gas_price_hex.strip_prefix("0x").unwrap_or(&gas_price_hex), 16).unwrap_or(0);
+    let beat = gas_price_wei as f64 / 1e9;
+
+    // 3. Fetch Globals
+    let globals_data = serde_json::json!([{"to": HEX_CONTRACT, "data": "0xc3124525"}, "latest"]);
+    let globals_hex = call_rpc("eth_call", globals_data)?;
+    let g_str = globals_hex.strip_prefix("0x").unwrap_or(&globals_hex);
+
+    let mut tshare_rate = 0.0;
+    let mut penalties = 0.0;
+    let mut daily_data_count: u128 = 0;
+
+    if g_str.len() >= 320 {
+        let share_rate = u128::from_str_radix(&g_str[128..192], 16).unwrap_or(0);
+        let penalty_total = u128::from_str_radix(&g_str[192..256], 16).unwrap_or(0);
+        daily_data_count = u128::from_str_radix(&g_str[256..320], 16).unwrap_or(0);
+
+        if share_rate > 0 {
+            tshare_rate = share_rate as f64 / 10.0;
+        }
+        penalties = penalty_total as f64 / 1e8;
+    }
+
+    // 4. Fetch Daily Data
+    let mut payout_per_tshare = 0.0;
+    if daily_data_count > 0 {
+        let day_to_query = daily_data_count - 1;
+        // FIXED: Padded to 64 hex characters (32 bytes) for correct ABI encoding
+        let day_padded = format!("0x90de6871{:064x}", day_to_query); 
+        let daily_data = serde_json::json!([{"to": HEX_CONTRACT, "data": day_padded}, "latest"]);
+        
+        if let Ok(daily_hex) = call_rpc("eth_call", daily_data) {
+            let d_str = daily_hex.strip_prefix("0x").unwrap_or(&daily_hex);
+            if d_str.len() >= 192 {
+                let day_payout = u128::from_str_radix(&d_str[0..64], 16).unwrap_or(0);
+                let day_shares = u128::from_str_radix(&d_str[64..128], 16).unwrap_or(0);
+                
+                if day_shares > 0 {
+                    // Multiplier 10000.0 accounts for the 4-decimal scaling of T-Shares in the Hex contract
+                    payout_per_tshare = (day_payout as f64 / day_shares as f64) * 10000.0;
+                }
+            }
+        }
+    }
+
+    Ok(LiveData {
+        price_pulsechain: price,
+        tshare_price_pulsechain: tshare_rate * price,
+        tshare_rate_hex_pulsechain: tshare_rate,
+        penalties_hex_pulsechain: penalties,
+        payout_per_tshare_pulsechain: payout_per_tshare,
+        beat,
+    })
+}
+
+fn display_data(live_data: &LiveData, tshares_payout: f64, tshares_value: f64, tshares: f64) {
+    println!("{:<14} : {:3.6} $", "HEX Price", live_data.price_pulsechain);
+    println!("{:<14} : {:3.2} $", "T-Share Price", live_data.tshare_price_pulsechain);
+    println!("{:<14} : {:3.1} HEX", "T-Share Rate", live_data.tshare_rate_hex_pulsechain);
     println!("{:<14} : {:3.3} HEX", "T-Share Payout", tshares_payout);
     println!("{:<14} : {:3.2} $", "T-Share Value", tshares_value);
     println!("{:<14} : {:3.2}", "T-Shares", tshares);
+    println!("{:<14} : {:3.2} HEX", "Penalties", live_data.penalties_hex_pulsechain);
+    println!("{:<14} : {:3.2} Gwei", "Beat", live_data.beat);
 }
 
 fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
@@ -130,10 +217,11 @@ fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
         ("T-Share Rate", current.tshare_rate, saved.tshare_rate, 1, "HEX", 6),
         ("T-Share Payout", current.tshare_payout, saved.tshare_payout, 3, "HEX", 6),
         ("T-Share Value", current.tshare_value, saved.tshare_value, 2, "$", 6),
+        ("Penalties", current.penalties, saved.penalties, 2, "HEX", 6),
+        ("Beat (Gwei)", current.beat, saved.beat, 2, "Gwei", 6),
         ("T-Shares", current.tshares, saved.tshares, 2, "", 2),
     ];
 
-    // First pass: check for any changes to avoid allocating a Vec unnecessarily
     let mut has_changes = false;
     for &(_, cv, sv, _, _, _) in &fields {
         if cv != sv {
@@ -142,7 +230,6 @@ fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
         }
     }
 
-    // Second pass: if changes exist, calculate and print the formatted output
     if has_changes {
         for (key, cv, sv, prec, suffix, diff_prec) in fields {
             let diff = cv - sv;
