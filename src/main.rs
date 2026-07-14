@@ -30,7 +30,7 @@ struct SavedData {
     tshare_value: f64,
     #[serde(rename = "Penalties")]
     penalties: f64,
-    #[serde(rename = "Beat (Gwei)")]
+    #[serde(rename = "Beat")]
     beat: f64,
     #[serde(rename = "T-Shares")]
     tshares: f64,
@@ -207,7 +207,7 @@ fn display_data(live_data: &LiveData, tshares_payout: f64, tshares_value: f64, t
     println!("{:<14} : {:3.2} $", "T-Share Value", tshares_value);
     println!("{:<14} : {:3.2}", "T-Shares", tshares);
     println!("{:<14} : {:3.2} HEX", "Penalties", live_data.penalties_hex_pulsechain);
-    println!("{:<14} : {:3.2} Gwei", "Beat", live_data.beat);
+    println!("{:<14} : {:3.2} Beat", "Beat", live_data.beat);
 }
 
 fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
@@ -218,7 +218,7 @@ fn compare_data(current: &SavedData, saved: &SavedData) -> bool {
         ("T-Share Payout", current.tshare_payout, saved.tshare_payout, 3, "HEX", 6),
         ("T-Share Value", current.tshare_value, saved.tshare_value, 2, "$", 6),
         ("Penalties", current.penalties, saved.penalties, 2, "HEX", 6),
-        ("Beat (Gwei)", current.beat, saved.beat, 2, "Gwei", 6),
+        ("Beat", current.beat, saved.beat, 2, "Beat", 6),
         ("T-Shares", current.tshares, saved.tshares, 2, "", 2),
     ];
 
