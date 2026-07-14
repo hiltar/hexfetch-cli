@@ -4,15 +4,9 @@ Fetching HEX Pulsechain API with Golang
 
 ## Usage
 
-`go run main.go` - This will use 1 T-Share  
-`go run main.go 100` - This will use 100 T-Shares
+`hexfetch-cli`     - This will use 1 T-Share  
+`hexfetch-cli 100` - This will use 100 T-Shares  
 
-## Building Go package
-```
-go mod init hexfetch
-go build
-./hexfetch <T-Shares>
-```
 Alternatively, add alias into .bashrc: `alias hexfetch='$HOME/hexfetch <T-Shares>'`  
 Use new .bashrc: `source ~/.bashrc`  
 Run `hexfetch`
